@@ -1,4 +1,9 @@
+import 'package:chatapp/widget/user_image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+final _firebase = FirebaseAuth
+    .instance; // it give access to firebase object that will be created and managed behind the scenes by the Firebase SDK
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -14,12 +19,52 @@ class _AuthScreenState extends State<AuthScreen> {
   var _enteredEmail = '';
   var _enteredPassword = '';
 
-  void _submit() {
+  bool _obscureText = true;
+
+  void _toggle() {
+    setState(() {
+      _obscureText = !_obscureText;
+    });
+  }
+
+  void _submit() async {
     final isValid = _form.currentState!.validate();
 
-    if (isValid) {
-      //save triggers some special function--onSaved
-      _form.currentState!.save();
+    if (!isValid) {
+      return;
+    }
+    _form.currentState!.save();
+
+    if (_isLogin) {
+      try {
+        final loginUserCredentials = _firebase.signInWithEmailAndPassword(
+          email: _enteredEmail,
+          password: _enteredPassword,
+        );
+      } on FirebaseAuthException catch (error) {
+        if (error.code == 'invalid-emai') {}
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message ?? 'Authentication Failed.'),
+          ),
+        );
+      }
+    } else {
+      try {
+        final userCredentials = await _firebase.createUserWithEmailAndPassword(
+          email: _enteredEmail,
+          password: _enteredPassword,
+        );
+      } on FirebaseAuthException catch (error) {
+        if (error.code == 'email-already-in-use') {}
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message ?? 'Authentication failed'),
+          ),
+        );
+      }
     }
   }
 
@@ -52,6 +97,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (!_isLogin) UserImagePicker(),
                           TextFormField(
                             decoration: const InputDecoration(
                               labelText: 'Email Address',
@@ -72,9 +118,15 @@ class _AuthScreenState extends State<AuthScreen> {
                             },
                           ),
                           TextFormField(
-                            obscureText: true,
-                            decoration: const InputDecoration(
+                            obscureText: _obscureText,
+                            decoration: InputDecoration(
                               labelText: 'Password',
+                              suffixIcon: IconButton(
+                                onPressed: _toggle,
+                                icon: _obscureText
+                                    ? const Icon(Icons.visibility)
+                                    : const Icon(Icons.visibility_off),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().length < 9) {
